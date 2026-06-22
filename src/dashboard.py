@@ -1,6 +1,6 @@
 """
 Page Dashboard Analytique complète pour Streamlit.
-Importer et appeler render_dashboard(df) dans app.py.
+Importer et appeler render_dashboard(df, models, model_choice, threshold) dans app.py.
 """
 import pandas as pd
 import streamlit as st
@@ -184,7 +184,7 @@ def render_demographic_analysis(df: pd.DataFrame):
             .unstack(fill_value=0)
         )
         fig3 = px.imshow(
-            heat, title="Churners : Tenure × Contrat",
+            heat, title="Churners : Tenure x Contrat",
             color_continuous_scale='Greys', text_auto=True
         )
         fig3.update_layout(height=300)
@@ -318,22 +318,220 @@ def render_funnel_analysis(df: pd.DataFrame):
     )
 
 
-def render_dashboard(df: pd.DataFrame):
+def render_model_performance_tab(models: dict, model_choice: str):
     """
-    Dashboard analytique complet.
+    Tab 3 — Performance du Modèle.
+    Affiche confusion matrix, ROC curves et feature importance à partir des modèles chargés.
+    """
+    from src.ui_components import (
+        render_confusion_matrix_plotly,
+        render_roc_plotly,
+        render_feature_importance_plotly,
+    )
+    from src.evaluation import compute_metrics
+
+    if not models:
+        st.error("Aucun modèle chargé. Vérifiez que les fichiers .pkl existent dans models/.")
+        return
+
+    # Load test data (cached via app.py helper, but we import it here safely)
+    try:
+        import joblib
+        import numpy as np
+        from sklearn.model_selection import train_test_split
+        from sklearn.preprocessing import StandardScaler
+
+        df_raw = pd.read_csv('data/telco_churn.csv')
+        if 'customerID' in df_raw.columns:
+            df_raw.drop('customerID', axis=1, inplace=True)
+        df_raw['TotalCharges'] = pd.to_numeric(df_raw['TotalCharges'], errors='coerce')
+        df_raw['TotalCharges'] = df_raw['TotalCharges'].fillna(df_raw['TotalCharges'].median())
+
+        encoders = joblib.load('models/encoders.pkl')
+        df_raw['Churn'] = (df_raw['Churn'] == 'Yes').astype(int)
+
+        binary_cols = ['Partner', 'Dependents', 'PhoneService', 'PaperlessBilling', 'SeniorCitizen']
+        for col in binary_cols:
+            if col in df_raw.columns and df_raw[col].dtype == object:
+                df_raw[col] = (df_raw[col] == 'Yes').astype(int)
+
+        for col, le in encoders.items():
+            if col in df_raw.columns:
+                df_raw[col] = le.transform(df_raw[col].astype(str))
+
+        df_raw['ChargesPerMonth'] = df_raw['TotalCharges'] / (df_raw['tenure'] + 1)
+        df_raw['TenureGroup'] = pd.cut(
+            df_raw['tenure'], bins=[0, 12, 24, 48, 72],
+            labels=[0, 1, 2, 3], include_lowest=True
+        ).astype(int)
+        service_cols = [
+            'PhoneService', 'MultipleLines', 'OnlineSecurity', 'OnlineBackup',
+            'DeviceProtection', 'TechSupport', 'StreamingTV', 'StreamingMovies'
+        ]
+        df_raw['TotalServices'] = df_raw[service_cols].apply(
+            lambda row: sum(1 for v in row if v > 0), axis=1
+        )
+
+        feature_names = joblib.load('models/feature_names.pkl')
+        X = df_raw[feature_names]
+        y = df_raw['Churn']
+        scaler = joblib.load('models/scaler.pkl')
+        X_scaled = pd.DataFrame(scaler.transform(X), columns=feature_names)
+        _, X_test, _, y_test = train_test_split(
+            X_scaled, y, test_size=0.2, random_state=42, stratify=y
+        )
+        y_test = y_test.reset_index(drop=True)
+
+    except Exception as e:
+        st.error(f"Erreur lors du chargement des données de test : {e}")
+        return
+
+    # ── KPIs rapides ──────────────────────────────────────
+    st.subheader("Métriques de Performance")
+    results = [compute_metrics(m, X_test, y_test, n) for n, m in models.items()]
+    df_metrics = pd.DataFrame(results).set_index('model').round(4)
+    st.dataframe(
+        df_metrics.style.highlight_max(axis=0, color='#dbeafe').format("{:.4f}"),
+        use_container_width=True
+    )
+
+    st.markdown("---")
+
+    # ── Confusion Matrix + ROC côte à côte ────────────────
+    col_cm, col_roc = st.columns(2)
+    with col_cm:
+        sel_cm = st.selectbox("Modèle — Matrice de Confusion", list(models.keys()), key="dash_cm")
+        st.plotly_chart(
+            render_confusion_matrix_plotly(models[sel_cm], X_test, y_test),
+            use_container_width=True
+        )
+    with col_roc:
+        st.plotly_chart(
+            render_roc_plotly(models, X_test, y_test),
+            use_container_width=True
+        )
+
+    st.markdown("---")
+
+    # ── Feature Importance ────────────────────────────────
+    st.subheader("Importance des Variables")
+    sel_fi = st.selectbox("Modèle — Feature Importance", list(models.keys()), key="dash_fi")
+    st.plotly_chart(
+        render_feature_importance_plotly(models[sel_fi], feature_names, sel_fi.upper()),
+        use_container_width=True
+    )
+
+
+def render_individual_prediction_tab(models: dict, model_choice: str, threshold: float):
+    """
+    Tab 4 — Prédiction Individuelle intégrée dans le dashboard.
+    Formulaire complet avec résultat et recommandations.
+    """
+    from src.ui_components import (
+        render_client_form,
+        render_prediction_result,
+        render_gauge_chart,
+        render_recommendations,
+    )
+    from src.prediction import predict_churn, get_retention_recommendations
+
+    if not models:
+        st.error("Aucun modèle chargé.")
+        return
+
+    st.subheader("Prédiction Individuelle — Client")
+    st.caption(
+        f"Modèle actif : **{model_choice.upper()}** · "
+        f"Seuil de décision : **{threshold:.0%}**"
+    )
+    st.markdown("---")
+
+    # Use a unique key prefix so this form is independent from the sidebar page
+    client_data = render_client_form()
+
+    col_btn, _ = st.columns([1, 3])
+    with col_btn:
+        run = st.button("Analyser ce client", type="primary",
+                        use_container_width=True, key="dash_pred_btn")
+
+    if run:
+        with st.spinner("Analyse en cours…"):
+            result = predict_churn(client_data, model_choice)
+        st.session_state['dash_result'] = result
+        st.session_state['dash_client'] = client_data
+
+    if 'dash_result' in st.session_state:
+        result = st.session_state['dash_result']
+        client_save = st.session_state['dash_client']
+        st.markdown("<hr>", unsafe_allow_html=True)
+        render_prediction_result(result)
+        st.plotly_chart(render_gauge_chart(result['probability_churn']), use_container_width=True)
+        st.markdown("<hr>", unsafe_allow_html=True)
+        recs = get_retention_recommendations(client_save, result['probability_churn'])
+        render_recommendations(recs)
+    else:
+        st.info("Remplissez le formulaire ci-dessus et cliquez sur Analyser.")
+
+
+def render_dashboard(df: pd.DataFrame, models: dict, model_choice: str, threshold: float):
+    """
+    Dashboard analytique complet structuré par onglets.
     Appeler cette fonction depuis app.py.
     """
     st.title("Dashboard Analytique — Churn Client")
-    st.markdown("---")
 
+    # KPIs en haut (toujours visibles)
     render_kpi_row(df)
-    st.markdown("---")
-    render_churn_overview(df)
-    st.markdown("---")
-    render_financial_analysis(df)
-    st.markdown("---")
-    render_demographic_analysis(df)
-    st.markdown("---")
-    render_service_analysis(df)
-    st.markdown("---")
-    render_funnel_analysis(df)
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Onglets
+    tabs = st.tabs([
+        "1. Overview",
+        "2. Exploration",
+        "3. Performance du Modèle",
+        "4. Prédiction Individuelle",
+        "5. Segments à Risque"
+    ])
+
+    with tabs[0]:
+        render_churn_overview(df)
+
+    with tabs[1]:
+        st.subheader("Exploration Interactive")
+        contract_filter = st.multiselect(
+            "Filtrer par contrat", df['Contract'].unique(),
+            default=list(df['Contract'].unique())
+        )
+        internet_filter = st.multiselect(
+            "Filtrer par service Internet", df['InternetService'].unique(),
+            default=list(df['InternetService'].unique())
+        )
+
+        df_filtered = df[
+            (df['Contract'].isin(contract_filter)) &
+            (df['InternetService'].isin(internet_filter))
+        ]
+
+        if df_filtered.empty:
+            st.warning("Aucune donnée avec ces filtres.")
+        else:
+            render_financial_analysis(df_filtered)
+            st.markdown("---")
+            render_demographic_analysis(df_filtered)
+            st.markdown("---")
+            render_service_analysis(df_filtered)
+
+    with tabs[2]:
+        render_model_performance_tab(models, model_choice)
+
+    with tabs[3]:
+        render_individual_prediction_tab(models, model_choice, threshold)
+
+    with tabs[4]:
+        render_funnel_analysis(df)
+        st.markdown("#### Recommandations Stratégiques par Segment")
+        st.markdown("""
+        - **Contrat Mensuel + Fibre** : Ce segment présente un risque de fuite très élevé (> 50%). **Action :** Proposer agressivement un renouvellement d'un an avec 10% de remise.
+        - **Seniors sur Contrat Mensuel** : **Action :** Un appel du support technique pour vérifier la satisfaction globale peut réduire la frustration liée à la technologie.
+        - **Paiements par chèque électronique** : **Action :** Simplifier la transition vers la carte de crédit automatique en offrant un mois gratuit de "Device Protection".
+        """)

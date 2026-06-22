@@ -150,10 +150,11 @@ def prepare_data(filepath: str, test_size: float = 0.2, random_state: int = 42):
     print(f"   Taux churn (train) : {y_train.mean():.1%}")
     print(f"   Taux churn (test)  : {y_test.mean():.1%}")
 
-    # Sauvegarder les noms de features
+    # Sauvegarder les noms de features et les transformateurs
     os.makedirs('models', exist_ok=True)
     joblib.dump(feature_names, 'models/feature_names.pkl')
     joblib.dump(scaler, 'models/scaler.pkl')
+    joblib.dump(encoders, 'models/encoders.pkl')
 
     return X_train, X_test, y_train, y_test, feature_names, encoders
 

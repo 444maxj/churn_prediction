@@ -202,7 +202,7 @@ def tune_with_optuna(X_train, y_train,
         import optuna
         optuna.logging.set_verbosity(optuna.logging.WARNING)
     except ImportError:
-print("Optuna non installé. Exécutez : pip install optuna")
+        print("Optuna non installé. Exécutez : pip install optuna")
         return None
 
     from sklearn.model_selection import StratifiedKFold, cross_val_score

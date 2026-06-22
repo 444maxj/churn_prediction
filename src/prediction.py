@@ -7,11 +7,15 @@ from typing import Union
 
 def load_artifacts(model_type: str = 'xgboost') -> tuple:
     """
-    Charge le modèle, le scaler et les feature names.
+    Charge le modèle, le scaler, les feature names et les encodeurs.
     model_type : 'xgboost' ou 'catboost'
     """
     feature_names = joblib.load('models/feature_names.pkl')
     scaler = joblib.load('models/scaler.pkl')
+    try:
+        encoders = joblib.load('models/encoders.pkl')
+    except FileNotFoundError:
+        encoders = {}
 
     if model_type == 'xgboost':
         model = joblib.load('models/xgb_model.pkl')
@@ -20,47 +24,35 @@ def load_artifacts(model_type: str = 'xgboost') -> tuple:
     else:
         raise ValueError("model_type doit être 'xgboost' ou 'catboost'")
 
-    return model, scaler, feature_names
+    return model, scaler, feature_names, encoders
 
 
 def preprocess_single_client(client_data: dict,
                                feature_names: list,
-                               scaler) -> pd.DataFrame:
+                               scaler,
+                               encoders: dict) -> pd.DataFrame:
     """
-    Prépare les données d'un seul client pour la prédiction.
-    client_data : dictionnaire avec les features du client
+    Prépare les données d'un seul client pour la prédiction en utilisant les encodeurs.
     """
-    # Mapping des valeurs textuelles vers numériques
-    mappings = {
-        'gender': {'Male': 0, 'Female': 1},
-        'Partner': {'No': 0, 'Yes': 1},
-        'Dependents': {'No': 0, 'Yes': 1},
-        'PhoneService': {'No': 0, 'Yes': 1},
-        'PaperlessBilling': {'No': 0, 'Yes': 1},
-        'MultipleLines': {'No': 0, 'Yes': 1, 'No phone service': 2},
-        'InternetService': {'DSL': 0, 'Fiber optic': 1, 'No': 2},
-        'OnlineSecurity': {'No': 0, 'Yes': 1, 'No internet service': 2},
-        'OnlineBackup': {'No': 0, 'Yes': 1, 'No internet service': 2},
-        'DeviceProtection': {'No': 0, 'Yes': 1, 'No internet service': 2},
-        'TechSupport': {'No': 0, 'Yes': 1, 'No internet service': 2},
-        'StreamingTV': {'No': 0, 'Yes': 1, 'No internet service': 2},
-        'StreamingMovies': {'No': 0, 'Yes': 1, 'No internet service': 2},
-        'Contract': {'Month-to-month': 0, 'One year': 1, 'Two year': 2},
-        'PaymentMethod': {
-            'Bank transfer (automatic)': 0,
-            'Credit card (automatic)': 1,
-            'Electronic check': 2,
-            'Mailed check': 3
-        }
-    }
-
-    # Appliquer les mappings
     processed = {}
     for key, value in client_data.items():
-        if key in mappings and isinstance(value, str):
-            processed[key] = mappings[key].get(value, 0)
-        else:
-            processed[key] = value
+        processed[key] = value
+
+    # Variables binaires (Yes/No)
+    binary_cols = ['Partner', 'Dependents', 'PhoneService', 'PaperlessBilling', 'SeniorCitizen']
+    for col in binary_cols:
+        if col in processed and isinstance(processed[col], str):
+            processed[col] = 1 if processed[col] == 'Yes' else 0
+
+    # Variables catégorielles avec LabelEncoder
+    for col, le in encoders.items():
+        if col in processed:
+            try:
+                # On met dans une liste car transform attend un array-like
+                processed[col] = le.transform([str(processed[col])])[0]
+            except ValueError:
+                # Si valeur inconnue, on prend la première classe par défaut
+                processed[col] = 0
 
     # Feature engineering (mêmes transformations qu'à l'entraînement)
     tenure = processed.get('tenure', 0)
@@ -109,9 +101,9 @@ def predict_churn(client_data: dict,
     Prédit le risque de churn pour un client.
     Retourne un dict avec la prédiction et la probabilité.
     """
-    model, scaler, feature_names = load_artifacts(model_type)
+    model, scaler, feature_names, encoders = load_artifacts(model_type)
 
-    X = preprocess_single_client(client_data, feature_names, scaler)
+    X = preprocess_single_client(client_data, feature_names, scaler, encoders)
     prediction = model.predict(X)[0]
     proba = model.predict_proba(X)[0]
 

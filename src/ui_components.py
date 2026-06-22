@@ -159,7 +159,7 @@ def apply_custom_css():
 
     /* ── Primary button ── */
     div.stButton > button[kind="primary"] {{
-        background: {INK} !important;
+        background: {ACCENT} !important;
         color: #ffffff !important;
         border: none !important;
         border-radius: 10px !important;
@@ -168,12 +168,12 @@ def apply_custom_css():
         font-size: 0.9rem !important;
         letter-spacing: 0.015em !important;
         transition: all 0.2s ease !important;
-        box-shadow: 0 2px 8px rgba(15,15,15,0.18) !important;
+        box-shadow: 0 2px 8px rgba(29,78,216,0.18) !important;
     }}
     div.stButton > button[kind="primary"]:hover {{
-        background: {ACCENT} !important;
+        background: {INK} !important;
         transform: translateY(-1px) !important;
-        box-shadow: 0 4px 16px rgba(29,78,216,0.3) !important;
+        box-shadow: 0 4px 16px rgba(15,15,15,0.3) !important;
     }}
     div.stButton > button[kind="secondary"] {{
         background: {SURFACE} !important;
@@ -390,12 +390,14 @@ def render_client_form() -> dict:
     with r1c1:
         gender = st.selectbox("Gender", ['Male', 'Female'], label_visibility="visible")
     with r1c2:
-        senior = st.selectbox("Senior Citizen", [0, 1],
-                              format_func=lambda x: "Yes" if x == 1 else "No")
+        st.markdown("<div style='margin-top:28px;'></div>", unsafe_allow_html=True)
+        senior = 1 if st.checkbox("Senior Citizen", value=False) else 0
     with r1c3:
-        partner = st.selectbox("Partner", ['No', 'Yes'])
+        st.markdown("<div style='margin-top:28px;'></div>", unsafe_allow_html=True)
+        partner = "Yes" if st.checkbox("Partner", value=False) else "No"
     with r1c4:
-        dependents = st.selectbox("Dependents", ['No', 'Yes'])
+        st.markdown("<div style='margin-top:28px;'></div>", unsafe_allow_html=True)
+        dependents = "Yes" if st.checkbox("Dependents", value=False) else "No"
 
     st.markdown("<div class='ag-group-label'>Subscription</div>", unsafe_allow_html=True)
     r2c1, r2c2, r2c3, r2c4 = st.columns(4)
@@ -404,7 +406,8 @@ def render_client_form() -> dict:
     with r2c2:
         contract = st.selectbox("Contract", ['Month-to-month', 'One year', 'Two year'])
     with r2c3:
-        paperless = st.selectbox("Paperless Billing", ['No', 'Yes'])
+        st.markdown("<div style='margin-top:28px;'></div>", unsafe_allow_html=True)
+        paperless = "Yes" if st.checkbox("Paperless Billing", value=True) else "No"
     with r2c4:
         payment = st.selectbox(
             "Payment Method",
@@ -415,7 +418,7 @@ def render_client_form() -> dict:
     st.markdown("<div class='ag-group-label'>Services</div>", unsafe_allow_html=True)
     r3c1, r3c2, r3c3 = st.columns(3)
     with r3c1:
-        phone       = st.selectbox("Phone Service", ['Yes', 'No'])
+        phone       = "Yes" if st.checkbox("Phone Service", value=True) else "No"
         multi_lines = st.selectbox("Multiple Lines", ['No', 'Yes', 'No phone service'])
         internet    = st.selectbox("Internet Service", ['Fiber optic', 'DSL', 'No'])
     with r3c2:
@@ -540,8 +543,9 @@ def render_gauge_chart(proba: float) -> go.Figure:
 #  CONFUSION MATRIX
 # ─────────────────────────────────────────────────────────────
 def render_confusion_matrix_plotly(model, X_test, y_test) -> go.Figure:
-    y_pred = model.predict(X_test)
-    cm = confusion_matrix(y_test, y_pred)
+    y_pred = np.array(model.predict(X_test)).astype(int).ravel()
+    y_true = np.array(y_test).astype(int).ravel()
+    cm = confusion_matrix(y_true, y_pred)
     labels = ['No Churn', 'Churn']
 
     annotations = []
@@ -581,8 +585,9 @@ def render_roc_plotly(models: dict, X_test, y_test) -> go.Figure:
 
     for i, (name, model) in enumerate(models.items()):
         y_proba = model.predict_proba(X_test)[:, 1]
-        fpr, tpr, _ = roc_curve(y_test, y_proba)
-        auc = roc_auc_score(y_test, y_proba)
+        y_true = np.array(y_test).astype(int).ravel()
+        fpr, tpr, _ = roc_curve(y_true, y_proba)
+        auc = roc_auc_score(y_true, y_proba)
         fig.add_trace(go.Scatter(
             x=fpr, y=tpr,
             name=f"{name}  AUC {auc:.3f}",
