@@ -1,44 +1,42 @@
 # Système de Prédiction du Churn Client
 
-**Projet 4IASD | XGBoost & CatBoost | Streamlit**
+**Projet ML | XGBoost & CatBoost | Streamlit**
 
-Ce projet implémente un système complet de prédiction du départ client (churn) pour un opérateur télécom. Il intègre une interface utilisateur moderne de style **SaaS Fintech Glassmorphism** construite avec Streamlit, et deux modèles de Machine Learning performants (XGBoost et CatBoost).
+Ce projet implémente un système complet de prédiction du départ client (churn) pour un opérateur télécom. Il intègre une interface utilisateur moderne de style **SaaS Fintech Glassmorphism** construite avec Streamlit, et plusieurs modèles de Machine Learning performants (XGBoost, CatBoost, Random Forest, Régression Logistique).
 
 ---
 
-## Structure du Projet
+## 📂 Structure du Projet
 
 ```text
-churn-prediction/
-|-- README.md
-|-- app.py                  # Point d'entrée de l'application Streamlit
+churn_prediction/
+|-- README.md               # Documentation du projet
+|-- app.py                  # Point d'entrée de l'application Streamlit (Interface 5 onglets)
 |-- requirements.txt        # Dépendances du projet
-|-- data/
-|   └── telco_churn.csv     # Dataset brut (Telco Customer Churn)
-|-- models/                 # Modèles et scalers entraînés
-|   |-- xgb_model.pkl       # Modèle XGBoost
-|   |-- cat_model.pkl       # Modèle CatBoost
-|   |-- lr_model.pkl        # Modèle Logistic Regression (Baseline)
-|   |-- scaler.pkl          # Scaler StandardScaler
-|   └── feature_names.pkl   # Noms des features d'entraînement
-|-- outputs/                # Graphiques générés par l'évaluation hors-ligne
-|   |-- roc_curve.png
-|   └── feature_importance.png
-└── src/                    # Code source des modules
+|-- data/                   # Données d'entraînement et de test
+|-- models/                 # Modèles entraînés et scalers (.pkl)
+|-- notebooks/              # Notebooks Jupyter (Exploration de données, tests)
+└── src/                    # Code source des modules métier
+    |-- dashboard.py        # Logique des graphiques interactifs Plotly
+    |-- evaluation.py       # Fonctions d'évaluation et de métriques
+    |-- hyperparameter_tuning.py # Logique d'optimisation (GridSearch/RandomSearch)
+    |-- prediction.py       # Inférence et génération de recommandations
     |-- preprocessing.py    # Pipeline de nettoyage et d'encodage
-    |-- training.py         # Script d'entraînement des modèles
-    |-- evaluation.py       # Fonctions d'évaluation et de tracés
-    |-- prediction.py       # Inférence sur nouveaux profils clients
-    └── ui_components.py    # Composants graphiques et styles CSS
+    └── ui_components.py    # Composants graphiques et styles CSS personnalisés
 ```
 
 ---
 
-## Étape 1 : Setup de l'environnement
+## 🚀 Lancer l'application en local
 
-### 1. Activer l'environnement virtuel (Windows)
+L'application est conçue pour être lancée très facilement avec Streamlit.
+
+### 1. Activer l'environnement virtuel (Optionnel mais recommandé)
 ```bash
+# Sur Windows
 venv\Scripts\activate
+# Sur Mac/Linux
+source venv/bin/activate
 ```
 
 ### 2. Installer les dépendances
@@ -46,107 +44,34 @@ venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
----
-
-## Étape 2 : Entraînement et Évaluation
-
-Vous pouvez exécuter les scripts de préparation des données et d'entraînement directement depuis le dossier racine.
-
-### Entraîner les modèles
-```bash
-python src/training.py
-```
-Cela va nettoyer le dataset, effectuer le feature engineering, puis entraîner et sauvegarder les modèles (XGBoost, CatBoost et Régression Logistique) dans le dossier `models/`.
-
-### Évaluer les modèles
-```bash
-python src/evaluation.py
-```
-Cela calcule les métriques d'évaluation sur le jeu de test et exporte les graphiques de courbe ROC et d'importance des features dans le dossier `outputs/`.
-
----
-
-## Étape 3 : Lancer l'application web
-
-Démarrez l'application interactive Streamlit :
+### 3. Démarrer l'interface
 ```bash
 streamlit run app.py
 ```
-L'interface s'ouvrira automatiquement à l'adresse [http://localhost:8501](http://localhost:8501).
+L'interface s'ouvrira automatiquement dans votre navigateur à l'adresse [http://localhost:8501](http://localhost:8501).
 
 ---
 
-## Métriques de performance obtenues
+## 📊 Fonctionnalités de l'Application
 
-Les modèles ont été optimisés pour faire face au déséquilibre des classes (environ 26.5% de churn dans les données).
+L'application Web interactive propose 5 onglets principaux :
 
-| Modèle | Accuracy | Précision | Recall (Rappel) | F1-Score | ROC-AUC |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **CatBoost** | 75.9% | 53.2% | **77.8%** | **63.2%** | **84.1%** |
-| **XGBoost** | **76.2%** | **53.9%** | 72.7% | 61.9% | 83.3% |
-
-> **Rappel** : Le *Recall* (Rappel) est privilégié dans ce cas d'usage car il est crucial de détecter un maximum de clients sur le point de partir, quitte à générer quelques faux positifs.
-
----
-
-## Design & Expérience utilisateur
-
-L'application web Streamlit applique un thème **Fintech Glassmorphism** haut de gamme :
-*   Arrière-plan épuré avec dégradés radiaux doux.
-*   Composants de formulaire encadrés par des cartes à effet verre dépoli (`.glass-card`).
-*   Transitions au survol et micro-animations animées en SVG pour les indicateurs visuels.
-*   Recommandations personnalisées et dynamiques en fonction des caractéristiques du client (contrat mensuel, options souscrites, factures élevées).
+1. **Prédiction** : Saisissez le profil d'un client (contrat, factures, options internet) et obtenez une prédiction instantanée de son risque de départ, accompagnée de recommandations d'actions de fidélisation.
+2. **Analytics** : Explorez les données clients interactives via des graphiques Plotly (répartition des contrats, impact des services souscrits, facturation).
+3. **Insights** : Découvrez quelles sont les variables qui ont le plus d'impact sur le churn (Feature Importance).
+4. **Optimisation** : Comparez en temps réel les performances de 4 modèles (Régression Logistique, Random Forest, XGBoost, CatBoost) via des matrices de confusion et des courbes ROC interactives.
+5. **Documentation** : Informations et architecture du projet.
 
 ---
 
-## Bonus : Fonctionnalités avancées
+## ☁️ Déploiement
 
-L'application inclut désormais :
-* Optimisation Hyperparamètres — RandomizedSearch et Optuna pour XGBoost / CatBoost
-* Prédiction par Lot (CSV) — upload CSV et prédictions en masse
-* Comparaison des Modèles — évaluation de plusieurs algorithmes et visualisation des trade-offs
-* Dashboard Analytique — analyses interactives des segments à risque et des services
+Le projet est conçu pour être déployé gratuitement et sans configuration complexe sur **Streamlit Community Cloud**.
 
-### Lancer le dashboard et les modules bonus
-Après avoir entraîné les modèles et installé les dépendances :
-```bash
-streamlit run app.py
-```
+1. Poussez votre code sur GitHub.
+2. Rendez-vous sur [share.streamlit.io](https://share.streamlit.io/).
+3. Connectez votre dépôt GitHub.
+4. Spécifiez `app.py` comme fichier principal.
+5. Cliquez sur "Deploy" !
 
-### Exécution en Docker
-```bash
-docker build -t churn-predictor .
-docker run -p 8501:8501 churn-predictor
-```
-
-Puis ouvrir :
-```text
-http://localhost:8501
-```
-
-### API REST avec FastAPI
-L'API est disponible via `api.py`.
-```bash
-uvicorn api:app --reload --host 0.0.0.0 --port 8000
-```
-
-Endpoints utiles :
-* `GET /health`
-* `POST /predict`
-* `POST /batch_predict`
-
-Example de test via `curl` :
-```bash
-curl -X POST http://localhost:8000/predict \
-  -H "Content-Type: application/json" \
-  -d '{"gender":"Female","SeniorCitizen":0,"Partner":"No","Dependents":"No","tenure":3,"PhoneService":"Yes","MultipleLines":"No","InternetService":"Fiber optic","OnlineSecurity":"No","OnlineBackup":"No","DeviceProtection":"No","TechSupport":"No","StreamingTV":"Yes","StreamingMovies":"Yes","Contract":"Month-to-month","PaperlessBilling":"Yes","PaymentMethod":"Electronic check","MonthlyCharges":85.70,"TotalCharges":260.0,"model_type":"xgboost"}'
-```
-
-### Fichiers ajoutés
-* `src/model_comparison.py`
-* `src/hyperparameter_tuning.py`
-* `src/dashboard.py`
-* `api.py`
-* `Dockerfile`
-* `.dockerignore`
-* `.streamlit/config.toml`
+Les modèles entraînés (`.pkl`) se trouvant dans le dossier `models/`, l'application est prête à l'emploi dès le premier lancement.
