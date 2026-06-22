@@ -347,6 +347,8 @@ def main():
             with st.spinner(f"Optimisation in progress ({method}, {n_iter} iterations) - this may take a few minutes..."):
                 try:
                     X_train, X_test, y_train, y_test, features = load_test_data()
+                    X_train = X_train.copy()
+                    y_train = y_train.copy()
 
                     if method == 'RandomizedSearch':
                         best = (
