@@ -58,11 +58,11 @@ def load_all_models(X_train, y_train):
     y_tr = np.array(y_train).astype(int).ravel()
     
     # Baseline models for comparison
-    lr = LogisticRegression(max_iter=1000, random_state=42)
+    lr = LogisticRegression(max_iter=1000, class_weight='balanced', random_state=42)
     lr.fit(X_train, y_tr)
     models['Logistic Regression'] = lr
     
-    rf = RandomForestClassifier(n_estimators=100, random_state=42)
+    rf = RandomForestClassifier(n_estimators=100, class_weight='balanced', random_state=42)
     rf.fit(X_train, y_tr)
     models['Random Forest'] = rf
     
